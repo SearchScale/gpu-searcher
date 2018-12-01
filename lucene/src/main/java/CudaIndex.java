@@ -1,5 +1,6 @@
 
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -129,9 +130,13 @@ public class CudaIndex {
 		List<Integer> docIds = new ArrayList<>();
 		List<Float> partialScores = new ArrayList<>();
 
+		int counter = 0;
+		FileWriter termDict = new FileWriter("term-dict.txt"); 
 		for (Object key: globalPostings.keySet()) {
 	        int pos = docIds.size();
 	        startPositions.add(pos);
+
+			termDict.write(key+"\n");
 
 			for (int j=0; j<globalPostings.get(key).size(); j++) {
 				DocFreq freq = globalPostings.get(key).get(j);
@@ -140,12 +145,17 @@ public class CudaIndex {
 				partialScores.add(freq.idf * (k1+1) * freq.freq / (freq.freq + normsMap.get(freq.docId)));
 			}
 		}
-		
-		System.out.println(startPositions);
+		termDict.close();
+
+		/*System.out.println(startPositions);
 		System.out.println(docIds);
-		System.out.println(partialScores);
+		System.out.println(partialScores);*/
+
+		System.out.println("Java: terms "+startPositions.size()+", postings: "+partialScores.size());
 
 		jni.initIndex(toArrayInt(docIds), toArrayFloat(partialScores), toArrayInt(startPositions));
+		int terms[] = {4055, 5071};
+		jni.getScores(terms);
 	}
 	
 	int[] toArrayInt(List<Integer> list) {

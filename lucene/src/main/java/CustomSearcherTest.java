@@ -23,6 +23,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.similarities.BM25Similarity;
+
 import java.util.Arrays;
 
 public class CustomSearcherTest {
@@ -74,12 +76,13 @@ public class CustomSearcherTest {
 
 		IndexReader indexReader = DirectoryReader.open(directory);
 		AcceleratedSearcher searcher = new AcceleratedSearcher(indexReader, "desc");
+		searcher.setSimilarity(new BM25Similarity());
 
 		//Query query = new TermQuery(new Term("desc", "societies"));
 		BooleanQuery query = new BooleanQuery.Builder()
-		.add(new BooleanClause(new TermQuery(new Term("desc", "often")), Occur.SHOULD))
-		.add(new BooleanClause(new TermQuery(new Term("desc", "societies")), Occur.SHOULD))
-		.build();
+				.add(new BooleanClause(new TermQuery(new Term("desc", "world")), Occur.SHOULD))
+				.add(new BooleanClause(new TermQuery(new Term("desc", "politics")), Occur.SHOULD))
+				.build();
 
 		TopDocs results = searcher.search(query, 10);
 	    System.out.println("Hits: "+results.totalHits);
@@ -89,6 +92,7 @@ public class CustomSearcherTest {
 		System.out.println(results.scoreDocs[2]);
 
 		indexReader.close();
+		System.out.println("Test finished...");
 	}
 
 	public static String getTitle(String str) {

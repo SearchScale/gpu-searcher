@@ -3,7 +3,13 @@
 import java.io.IOException;
 
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TopDocs;
 
 public class AcceleratedSearcher extends IndexSearcher {
 
@@ -16,6 +22,43 @@ public class AcceleratedSearcher extends IndexSearcher {
 			e.printStackTrace();
 		}
 	}
-
 	
+	String[] getQueryTerms(Query query) {
+		if (query instanceof BooleanQuery) {
+			BooleanQuery bq = (BooleanQuery) query;
+			String terms[] = new String[bq.clauses().size()];
+
+			for (int i=0; i<bq.clauses().size(); i++) {
+				BooleanClause clause = bq.clauses().get(i);
+				if (clause.getOccur().equals(Occur.SHOULD) != true) {
+					return null;
+				}
+				terms[i] = ((TermQuery)clause.getQuery()).getTerm().text();
+			}
+			return terms;
+		}
+		return null;
+	}
+	@Override
+	public TopDocs search(Query query, int n) throws IOException {
+		System.out.println("Specialized searcher was called...");
+		
+		long start = System.nanoTime();
+
+		String queryTerms[] = getQueryTerms(query);
+		int terms[] = new int[queryTerms.length];
+		for (int i=0; i<queryTerms.length; i++) {
+			terms[i] = gpuSearcher.termDictionary.get(queryTerms[i]);
+		}
+		//System.out.println("Query terms: "+Arrays.toString(terms));
+		gpuSearcher.search(terms);
+		long end = System.nanoTime();
+		System.out.println("Cuda searcher took: "+(end-start)/1000000.0);
+		
+		start = System.nanoTime();
+		TopDocs topdocs = super.search(query, n);
+		end = System.nanoTime();
+		System.out.println("Lucene searcher took: "+(end-start)/1000000.0);
+		return topdocs;
+	}
 }

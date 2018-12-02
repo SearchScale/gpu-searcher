@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -19,6 +20,7 @@ import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermStatistics;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.util.BytesRef;
@@ -27,6 +29,7 @@ import org.apache.lucene.util.SmallFloat;
 public class CudaIndex {
 	
 	private CudaIndexJni jni = new CudaIndexJni();
+	protected ConcurrentHashMap<String, Integer> termDictionary = new ConcurrentHashMap<>();
 
 	public CudaIndex(IndexReader r, IndexSearcher s, List<LeafReaderContext> leaves, String field) throws IOException {
 		BM25Similarity sim = (BM25Similarity) s.getSimilarity(true);
@@ -137,6 +140,7 @@ public class CudaIndex {
 	        startPositions.add(pos);
 
 			termDict.write(key+"\n");
+			termDictionary.put(key.toString(), (counter++));
 
 			for (int j=0; j<globalPostings.get(key).size(); j++) {
 				DocFreq freq = globalPostings.get(key).get(j);
@@ -153,11 +157,23 @@ public class CudaIndex {
 
 		System.out.println("Java: terms "+startPositions.size()+", postings: "+partialScores.size());
 
+		long start = System.nanoTime();
 		jni.initIndex(toArrayInt(docIds), toArrayFloat(partialScores), toArrayInt(startPositions));
-		int terms[] = {4055, 5071};
-		jni.getScores(terms);
+		long end = System.nanoTime();
+		System.out.println("Cuda searcher initialization took (ms): "+(end-start)/1000000.0);
+
+		/*int terms[] = {4055, 5071};
+		long start = System.nanoTime();
+		search(terms);
+		long end = System.nanoTime();
+		System.out.println("Cuda searcher took: "+(end-start)/1000000.0);*/
 	}
 	
+	public ScoreDoc[] search(int terms[]) {
+		jni.getScores(terms);
+		return null;
+	}
+
 	int[] toArrayInt(List<Integer> list) {
 		int ret[] = new int[list.size()];
 		for (int i=0; i<list.size(); i++)

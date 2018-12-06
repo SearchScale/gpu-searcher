@@ -84,12 +84,13 @@ public class CustomSearcherTest {
 				.add(new BooleanClause(new TermQuery(new Term("desc", "politics")), Occur.SHOULD))
 				.build();
 
-		TopDocs results = searcher.search(query, 10);
+		int k = 10;
+		TopDocs results = searcher.search(query, k);
 	    System.out.println("Hits: "+results.totalHits);
 		//System.out.println(Arrays.toString(results.scoreDocs));
-		System.out.println(results.scoreDocs[0]);
-		System.out.println(results.scoreDocs[1]);
-		System.out.println(results.scoreDocs[2]);
+		for (int i=0; i<k; i++) {
+			System.out.println(results.scoreDocs[i]);
+		}
 
 		indexReader.close();
 		System.out.println("Test finished...");

@@ -138,8 +138,17 @@ JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
       cout<<"(CUDA) Doc "<<reducedKeys[0]<<": "<<"score="<<reducedValues[0]<<endl;
       cout<<"(CUDA) Doc "<<reducedKeys[1]<<": "<<"score="<<reducedValues[1]<<endl;
       cout<<"(CUDA) Doc "<<reducedKeys[2]<<": "<<"score="<<reducedValues[2]<<endl;
+
+      cout<<"Merged size: "<<mergedSize<<endl;
+      int   *retDocsAndScores      = (int*)malloc(mergedSize*4*2);
+      float *distances = &((float*)retDocsAndScores)[mergedSize];
   
-      return NULL;
+      thrust::copy(reducedKeys.begin(), reducedKeys.end(), retDocsAndScores);
+      thrust::copy(reducedValues.begin(), reducedValues.end(), distances);
+  
+      jobject directBuffer = env->NewDirectByteBuffer((void*)retDocsAndScores, mergedSize*2*4);
+  
+      return directBuffer;
   }
   
   

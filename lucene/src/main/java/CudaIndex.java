@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -146,7 +148,7 @@ public class CudaIndex {
 				DocFreq freq = globalPostings.get(key).get(j);
 				//System.out.print(freq.docId+" "+freq.freq+" "+freq.idf+" ");
 				docIds.add(freq.docId);
-				partialScores.add(freq.idf * (k1+1) * freq.freq / (freq.freq + normsMap.get(freq.docId)));
+				partialScores.add(freq.idf * (k1+1) * (float)freq.freq / ((float)freq.freq + normsMap.get(freq.docId)));
 			}
 		}
 		termDict.close();
@@ -170,7 +172,17 @@ public class CudaIndex {
 	}
 	
 	public ScoreDoc[] search(int terms[]) {
-		jni.getScores(terms);
+		Object results = jni.getScores(terms);
+
+		ByteBuffer buf = ((ByteBuffer)results).order(ByteOrder.nativeOrder());
+		int N = buf.limit() / 8;
+		System.out.println("Java received array elements: "+results);
+		for (int i=0; i<10; i++) {
+			int id = buf.getInt((i)*4);
+			float score = buf.getFloat((N+i)*4);
+			System.out.println("DocId: " + buf.getInt((i)*4) + ", Distance: "
+					+ score);
+		}
 		return null;
 	}
 

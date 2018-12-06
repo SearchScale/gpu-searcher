@@ -24,6 +24,7 @@ import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermStatistics;
+import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.SmallFloat;
@@ -171,19 +172,25 @@ public class CudaIndex {
 		System.out.println("Cuda searcher took: "+(end-start)/1000000.0);*/
 	}
 	
-	public ScoreDoc[] search(int terms[]) {
+	public TopDocs search(int terms[]) {
 		Object results = jni.getScores(terms);
 
 		ByteBuffer buf = ((ByteBuffer)results).order(ByteOrder.nativeOrder());
 		int N = buf.limit() / 8;
 		System.out.println("Java received array elements: "+results);
-		for (int i=0; i<10; i++) {
+		ScoreDoc scoreDocs[] = new ScoreDoc[N];
+		float maxScore = Float.NEGATIVE_INFINITY;
+		for (int i=0; i<N; i++) {
 			int id = buf.getInt((i)*4);
 			float score = buf.getFloat((N+i)*4);
-			System.out.println("DocId: " + buf.getInt((i)*4) + ", Distance: "
-					+ score);
+			if (i<10) {
+				System.out.println("DocId: " + id + ", Distance: "
+						+ score);
+			}
+			scoreDocs[i] = new ScoreDoc(id, score);
+			maxScore = Math.max(maxScore, score);
 		}
-		return null;
+		return new TopDocs(N, scoreDocs, maxScore);
 	}
 
 	int[] toArrayInt(List<Integer> list) {

@@ -50,15 +50,17 @@ public class AcceleratedSearcher extends IndexSearcher {
 		for (int i=0; i<queryTerms.length; i++) {
 			terms[i] = gpuSearcher.termDictionary.get(queryTerms[i]);
 		}
+		long lap = System.nanoTime();
 		//System.out.println("Query terms: "+Arrays.toString(terms));
-		gpuSearcher.search(terms);
+		TopDocs topDocsGpu = gpuSearcher.search(terms);
 		long end = System.nanoTime();
 		System.out.println("Cuda searcher took: "+(end-start)/1000000.0);
+		System.out.println("Term resolution time: "+(lap-start)/1000000.0);
 		
 		start = System.nanoTime();
-		TopDocs topdocs = super.search(query, n);
+		TopDocs topDocsCpu = super.search(query, n);
 		end = System.nanoTime();
 		System.out.println("Lucene searcher took: "+(end-start)/1000000.0);
-		return topdocs;
+		return topDocsCpu;
 	}
 }

@@ -45,25 +45,8 @@
       }
       docIdsGpu = docs;
       partialScoresGpu = scores;
-      // Copy the vectors to the device
-      /*host_vector<int> cpu_docs(N);
-      for (int i=0; i<N; i++) cpu_docs[i] = docs[i];
-      gpu_docs = cpu_docs;
-  
-      host_vector<float> cpu_lats(N);
-      for (int i=0; i<N; i++) cpu_lats[i] = lats[i];
-      gpu_lats = cpu_lats;
-  
-      host_vector<float> cpu_lngs(N);
-      for (int i=0; i<N; i++) cpu_lngs[i] = lngs[i];
-      gpu_lngs = cpu_lngs;*/
 
-      /*startPositionsGpu = starts;
-      docIdsGpu = docs;
-      partialsScoresGpu = scores;
-  
-      cudaDeviceSynchronize();
-      */return T;
+		return T;
   }
 
 JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
@@ -73,43 +56,15 @@ JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
     vector<int> queryTerms (Q);
     env->GetIntArrayRegion( terms, 0, Q, &queryTerms[0] );
 
-    /*for (int i=0; i<T; i++) {
-        cout<<startPositionsCpu[i]<<", ";
-    } cout<<endl;
-  
-    for (int i=0; i<P; i++) {
-        cout<<docIdsGpu[i]<<"="<<partialScoresGpu[i]<<", ";
-    }
-    cout<<endl;*/
     cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
     cout<<"Postings: "<<P<<endl;
-      /*long timer = ms();
-  
-      // Actual scoring/sorting on device
-      device_vector<float> gpu_distances(N);
-      thrust::transform(gpu_lats.begin(), gpu_lats.end(), gpu_lngs.begin(), gpu_distances.begin(), geodist(lat, lng)  );
-      cudaDeviceSynchronize();
-      device_vector<int> docIds = gpu_docs;
-      cout<<"Transformation applied: "<<endl;
-      thrust::sort_by_key(gpu_distances.begin(), gpu_distances.end(), docIds.begin());
-      cudaDeviceSynchronize();
-      cout<<"Sorting done: "<<endl;
-  
-      int   *docs      = (int*)malloc(N*4*2);
-      float *distances = &((float*)docs)[N];
-  
-      thrust::copy(docIds.begin(), docIds.end(), docs);
-      thrust::copy(gpu_distances.begin(), gpu_distances.end(), distances);
-  
-      jobject directBuffer = env->NewDirectByteBuffer((void*)docs, N*2*4);
-      cout<<"Cuda After array copy total time: "<<ms()-timer<<endl;
-  
-      return directBuffer;*/
 
       int mergedSize = 0;
       for (int q=0; q<queryTerms.size(); q++) {
           mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
       }
+      
+      cout<<"Merged size is going to be: "<<mergedSize<<endl;
       device_vector<int> mergedDocIds(mergedSize);
       device_vector<float> mergedPartialScores(mergedSize);
       device_vector<float> reducedValues(mergedSize);

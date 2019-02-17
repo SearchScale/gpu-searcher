@@ -1,6 +1,8 @@
 
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Set;
 
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.BooleanClause;
@@ -14,10 +16,10 @@ import org.apache.lucene.search.TopDocs;
 public class AcceleratedSearcher extends IndexSearcher {
 
 	private CudaIndex gpuSearcher;
-	public AcceleratedSearcher(IndexReader r, String field) {
+	public AcceleratedSearcher(IndexReader r, String field, Set<String> whitelist) {
 		super(r);
 		try {
-			gpuSearcher = new CudaIndex(r, this, leafContexts, field);
+			gpuSearcher = new CudaIndex(r, this, leafContexts, field, whitelist);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -41,15 +43,28 @@ public class AcceleratedSearcher extends IndexSearcher {
 	}
 	@Override
 	public TopDocs search(Query query, int n) throws IOException {
-		System.out.println("Specialized searcher was called...");
+		System.out.println("Specialized searcher was called... Term dictionary size: "+gpuSearcher.termDictionary.size());
 		
 		long start = System.nanoTime();
 
 		String queryTerms[] = getQueryTerms(query);
-		int terms[] = new int[queryTerms.length];
-		for (int i=0; i<queryTerms.length; i++) {
-			terms[i] = gpuSearcher.termDictionary.get(queryTerms[i]);
+		int presentTerms = 0;
+		for (String term: queryTerms) {
+			if (gpuSearcher.termDictionary.get(term) != null) {
+				presentTerms++;
+			}
 		}
+		//System.out.println(">>> Present terms: "+presentTerms);
+		//System.out.println(">>> Query terms: "+Arrays.toString(queryTerms));
+		//System.out.println(">>> Dict terms: "+gpuSearcher.termDictionary.keySet());
+
+		int terms[] = new int[presentTerms];
+		for (int i=0, t=0; i<queryTerms.length; i++) {
+			if (gpuSearcher.termDictionary.get(queryTerms[i]) != null) {
+				terms[t++] = gpuSearcher.termDictionary.get(queryTerms[i]);
+			}
+		}
+		System.out.println("Query terms: "+Arrays.toString(terms));
 		long lap = System.nanoTime();
 		//System.out.println("Query terms: "+Arrays.toString(terms));
 		TopDocs topDocsGpu = gpuSearcher.search(terms);

@@ -33,7 +33,7 @@ public class CustomSearcherTest {
 		IndexWriterConfig iwConfig = new IndexWriterConfig();
 		IndexWriter indexWriter = new IndexWriter(directory, iwConfig);
 
-		String wikiFilePath = "enwiki-20180401-abstract.xml";
+		String wikiFilePath = "enwiki-latest-abstract.xml";
 		/*for (int i=0; i<100; i++) {
 			Document doc = new Document();
 			doc.add(new TextField("title", "my first book is on ishan chattopadhyaya", Store.YES));
@@ -66,7 +66,7 @@ public class CustomSearcherTest {
 			  doc.add(new TextField("desc", desc, Field.Store.NO));
 			  indexWriter.addDocument(doc);
 	
-			  if (counter>=50000) break;
+			  if (counter>=8000000) break;
 			  counter++;
 			}
 		  }
@@ -75,11 +75,13 @@ public class CustomSearcherTest {
 		indexWriter.close();
 
 		IndexReader indexReader = DirectoryReader.open(directory);
-		AcceleratedSearcher searcher = new AcceleratedSearcher(indexReader, "desc");
+		AcceleratedSearcher searcher = new AcceleratedSearcher(indexReader, "desc", null);
 		searcher.setSimilarity(new BM25Similarity());
 
 		//Query query = new TermQuery(new Term("desc", "societies"));
 		BooleanQuery query = new BooleanQuery.Builder()
+                                .add(new BooleanClause(new TermQuery(new Term("desc", "born")), Occur.SHOULD))
+                                .add(new BooleanClause(new TermQuery(new Term("desc", "often")), Occur.SHOULD))
 				.add(new BooleanClause(new TermQuery(new Term("desc", "world")), Occur.SHOULD))
 				.add(new BooleanClause(new TermQuery(new Term("desc", "politics")), Occur.SHOULD))
 				.build();

@@ -4,6 +4,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +34,11 @@ public class CudaIndex {
 	
 	private CudaIndexJni jni = new CudaIndexJni();
 	protected ConcurrentHashMap<String, Integer> termDictionary = new ConcurrentHashMap<>();
-
-	public CudaIndex(IndexReader r, IndexSearcher s, List<LeafReaderContext> leaves, String field) throws IOException {
+	private Set<String> whitelist = null;
+	
+	public CudaIndex(IndexReader r, IndexSearcher s, List<LeafReaderContext> leaves, String field, 
+			Set<String> whitelist) throws IOException {
+		this.whitelist = whitelist;
 		BM25Similarity sim = (BM25Similarity) s.getSimilarity(true);
 		CollectionStatistics collStats = null;
 		try {
@@ -63,6 +67,9 @@ public class CudaIndex {
 			BytesRef t;
 			while ((t = myTerms.next() )!= null) {
 
+				if (whitelist != null && whitelist.contains(t.utf8ToString()) == false) {
+					continue;
+				}
 				// get idf
 				//TermStates state = TermStates.build(s.getIndexReader().getContext(), new Term("desc", t), true);
 				TermStatistics termStats = s.termStatistics(new Term(field, t), new TermContext(r.getContext()));
@@ -183,10 +190,10 @@ public class CudaIndex {
 		for (int i=0; i<N; i++) {
 			int id = buf.getInt((i)*4);
 			float score = buf.getFloat((N+i)*4);
-			if (i<10) {
+			/*if (i<10) {
 				System.out.println("DocId: " + id + ", Distance: "
 						+ score);
-			}
+			}*/
 			scoreDocs[i] = new ScoreDoc(id, score);
 			maxScore = Math.max(maxScore, score);
 		}

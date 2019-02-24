@@ -194,8 +194,8 @@ public class CudaIndex {
 		System.out.println("Cuda searcher took: "+(end-start)/1000000.0);*/
 	}
 	
-	public TopDocs search(int terms[]) {
-		Object results = jni.getScores(terms);
+	public TopDocs search(int terms[], int n) {
+		Object results = jni.getScores(terms, n);
 
 		ByteBuffer buf = ((ByteBuffer)results).order(ByteOrder.nativeOrder());
 		int N = buf.limit() / 8;

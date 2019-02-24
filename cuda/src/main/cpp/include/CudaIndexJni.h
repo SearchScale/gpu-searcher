@@ -21,7 +21,7 @@ JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
  * Signature: ([I)Ljava/lang/Object;
  */
 JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
-  (JNIEnv *, jobject, jintArray);
+  (JNIEnv *, jobject, jintArray, jint);
 
 #ifdef __cplusplus
 }

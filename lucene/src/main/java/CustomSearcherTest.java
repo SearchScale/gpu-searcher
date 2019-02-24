@@ -26,6 +26,8 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 public class CustomSearcherTest {
 	public static void main(String[] args) throws IOException {
@@ -66,13 +68,20 @@ public class CustomSearcherTest {
 			  doc.add(new TextField("desc", desc, Field.Store.NO));
 			  indexWriter.addDocument(doc);
 	
-			  if (counter>=8000000) break;
+			  if (counter>=40) break;
 			  counter++;
 			}
 		  }
 		}
 		indexWriter.commit();
 		indexWriter.close();
+		
+		Set<String> whitelist = new HashSet<>();
+//		whitelist.add("born");
+		whitelist.add("political");
+		whitelist.add("often");
+		whitelist.add("societies");
+
 
 		IndexReader indexReader = DirectoryReader.open(directory);
 		AcceleratedSearcher searcher = new AcceleratedSearcher(indexReader, "desc", null);
@@ -80,10 +89,10 @@ public class CustomSearcherTest {
 
 		//Query query = new TermQuery(new Term("desc", "societies"));
 		BooleanQuery query = new BooleanQuery.Builder()
-                                .add(new BooleanClause(new TermQuery(new Term("desc", "born")), Occur.SHOULD))
+                                .add(new BooleanClause(new TermQuery(new Term("desc", "political")), Occur.SHOULD))
                                 .add(new BooleanClause(new TermQuery(new Term("desc", "often")), Occur.SHOULD))
-				.add(new BooleanClause(new TermQuery(new Term("desc", "world")), Occur.SHOULD))
-				.add(new BooleanClause(new TermQuery(new Term("desc", "politics")), Occur.SHOULD))
+				//.add(new BooleanClause(new TermQuery(new Term("desc", "world")), Occur.SHOULD))
+				//.add(new BooleanClause(new TermQuery(new Term("desc", "politics")), Occur.SHOULD))
 				.build();
 
 		int k = 10;

@@ -13,7 +13,7 @@ extern "C" {
  * Signature: ([I[F[I)I
  */
 JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
-  (JNIEnv *, jobject, jintArray, jfloatArray, jintArray);
+  (JNIEnv *, jobject, jintArray, jfloatArray, jintArray, jlong);
 
 /*
  * Class:     CudaIndexJni

@@ -20,6 +20,7 @@ import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermContext;
+import org.apache.lucene.index.TermState;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.search.CollectionStatistics;
 import org.apache.lucene.search.IndexSearcher;
@@ -59,6 +60,7 @@ public class CudaIndex {
 		TreeMap<Integer, Float> normsMap = new TreeMap();
 
 		int baseOffset = 0;
+		int TOTAL_DOCS = 0;
 		for (int i=0; i<leaves.size(); i++) {
 			System.out.println("Leaf: "+i);
 			System.out.println("Docs: "+leaves.get(i).reader().maxDoc());
@@ -72,9 +74,11 @@ public class CudaIndex {
 				}
 				// get idf
 				//TermStates state = TermStates.build(s.getIndexReader().getContext(), new Term("desc", t), true);
-				TermStatistics termStats = s.termStatistics(new Term(field, t), new TermContext(r.getContext()));
+				Term term = new Term(field, t);
+				TermContext termContext = TermContext.build(s.getTopReaderContext(), term);
+				TermStatistics termStats = s.termStatistics(term, termContext);
 				float idf = sim.idfExplain(collStats, termStats).getValue();
-
+				//System.out.println(" ?? "+t.utf8ToString()+", idf: "+idf);
 
 				allTerms.add(t.utf8ToString());
 				//System.out.println("Term: "+t.utf8ToString());
@@ -111,14 +115,16 @@ public class CudaIndex {
 			// write norm values
 			for (int j=0; (d = norms.docID()) != 2147483647; j++) {
 				n = norms.longValue();
-				//System.out.println("Doc: "+(d)+", norm: "+cache[(int)n & 0xFF]);
+				//System.out.println("Doc: "+(baseOffset+d)+", norm: "+cache[(int)n & 0xFF]);
 				normsMap.put(baseOffset+(int)d, cache[(int)n & 0xFF]);
 				norms.nextDoc();
 			}
 
 			baseOffset += leaves.get(i).reader().maxDoc();
+			TOTAL_DOCS += leaves.get(i).reader().maxDoc();
 		}
 
+		System.out.println("Total Docs: "+TOTAL_DOCS);
 		/*
 
 		// writing it out
@@ -156,6 +162,15 @@ public class CudaIndex {
 				DocFreq freq = globalPostings.get(key).get(j);
 				//System.out.print(freq.docId+" "+freq.freq+" "+freq.idf+" ");
 				docIds.add(freq.docId);
+				/*if (freq.docId==0) {
+					System.out.println(" %%%%% "+key);
+					System.out.println(" %%%%% "+freq.idf);
+					System.out.println(" %%%%% "+k1);
+					System.out.println(" %%%%% "+freq.freq);
+					System.out.println(" %%%%% "+normsMap.get(freq.docId));
+					System.out.println(" %%%%% ");
+
+				}*/
 				partialScores.add(freq.idf * (k1+1) * (float)freq.freq / ((float)freq.freq + normsMap.get(freq.docId)));
 			}
 		}
@@ -168,7 +183,7 @@ public class CudaIndex {
 		System.out.println("Java: terms "+startPositions.size()+", postings: "+partialScores.size());
 
 		long start = System.nanoTime();
-		jni.initIndex(toArrayInt(docIds), toArrayFloat(partialScores), toArrayInt(startPositions));
+		jni.initIndex(toArrayInt(docIds), toArrayFloat(partialScores), toArrayInt(startPositions), (long)TOTAL_DOCS);
 		long end = System.nanoTime();
 		System.out.println("Cuda searcher initialization took (ms): "+(end-start)/1000000.0);
 

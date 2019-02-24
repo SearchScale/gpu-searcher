@@ -1,79 +1,69 @@
-  #include <stdio.h>
-  #include <math.h>
-  #include "CudaIndexJni.h"
+#include <stdio.h>
+#include <math.h>
+#include "CudaIndexJni.h"
+#include <thrust/transform.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+#include <vector>
+#include <sys/time.h>
   
-  #include <thrust/transform.h>
-  #include <thrust/functional.h>
-  #include <thrust/host_vector.h>
-  #include <thrust/device_vector.h>
-  #include <vector>
-  #include <sys/time.h>
-  
-  using namespace std;
-  using namespace thrust;
+using namespace std;
+using namespace thrust;
 
-  long ms () {
-      struct timeval tp;
-      gettimeofday(&tp, NULL);
-      return tp.tv_sec * 1000 + tp.tv_usec / 1000; //get current timestamp in milliseconds
+long ms () {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  return tp.tv_sec * 1000 + tp.tv_usec / 1000; //get current timestamp in milliseconds
+}
+  
+long T;
+long P;
+long TOTAL_DOCS;
+
+struct saxpy_functor {
+  const float a;
+
+  saxpy_functor(float _a) : a(_a) {}
+
+  __host__ __device__
+  float operator()(const float& x, const float& y) const { 
+    return a * x + y;
   }
-  
-  long T;
-  long P;
-  long TOTAL_DOCS;
-
-
-  struct saxpy_functor
-{
-    const float a;
-
-    saxpy_functor(float _a) : a(_a) {}
-
-    __host__ __device__
-        float operator()(const float& x, const float& y) const { 
-            return a * x + y;
-        }
 };
 
-  host_vector<int> startPositionsCpu;
-  device_vector<int> docIdsGpu;
-  device_vector<float> partialScoresGpu;
-  device_vector<int> docIdsTemplate;
+host_vector<int> startPositionsCpu;
+device_vector<int> docIdsGpu;
+device_vector<float> partialScoresGpu;
+device_vector<int> docIdsTemplate;
 
-  JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
-  (JNIEnv *env, jobject jobj, jintArray docIds, jfloatArray partialScores, jintArray startPositions, jlong totalDocs) {
-      jsize len = env->GetArrayLength(startPositions);
-      jsize numPostings = env->GetArrayLength(docIds);
-      vector<int> docs (numPostings);
-      env->GetIntArrayRegion( docIds, 0, numPostings, &docs[0] );
-      vector<float> scores (numPostings);
-      env->GetFloatArrayRegion( partialScores, 0, numPostings, &scores[0] );
-      int *starts = env->GetIntArrayElements(startPositions, NULL);
+JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
+(JNIEnv *env, jobject jobj, jintArray docIds, jfloatArray partialScores, jintArray startPositions, jlong totalDocs) {
+  jsize len = env->GetArrayLength(startPositions);
+  jsize numPostings = env->GetArrayLength(docIds);
+  vector<int> docs (numPostings);
+  env->GetIntArrayRegion( docIds, 0, numPostings, &docs[0] );
+  vector<float> scores (numPostings);
+  env->GetFloatArrayRegion( partialScores, 0, numPostings, &scores[0] );
+  int *starts = env->GetIntArrayElements(startPositions, NULL);
   
-      TOTAL_DOCS = totalDocs;
-      cout<<"[CUDA] TOTAL_DOCS: "<<TOTAL_DOCS<<endl; 
-      T = len;
-      P = numPostings;
+  TOTAL_DOCS = totalDocs;
+  cout<<"[CUDA] TOTAL_DOCS: "<<TOTAL_DOCS<<endl; 
+  T = len;
+  P = numPostings;
 
-      for (int i=0; i<T; i++) {
-        startPositionsCpu.push_back(starts[i]);
-      }
-      docIdsGpu = docs;
-      partialScoresGpu = scores;
-
-      host_vector<int> tmp(TOTAL_DOCS);
-      for (int i=0; i<TOTAL_DOCS; i++)
-        tmp[i] = i;
-      docIdsTemplate = tmp;
-		return T;
+  for (int i=0; i<T; i++) {
+    startPositionsCpu.push_back(starts[i]);
   }
+  docIdsGpu = docs;
+  partialScoresGpu = scores;
 
-    
-  void printVector(device_vector<float> arr) {
-    for (int i=0; i<40; i++) {
-      cout<<arr[i]<<" ";
-    } cout<<endl;
-  }
+  host_vector<int> tmp(TOTAL_DOCS);
+  for (int i=0; i<TOTAL_DOCS; i++)
+    tmp[i] = i;
+  docIdsTemplate = tmp;
+  return T;
+}
 
 jobject algorithm2(JNIEnv *env, int mergedSize, vector<int> queryTerms, jint topK) {
   device_vector<int> mergedDocIds(mergedSize);
@@ -150,25 +140,23 @@ jobject algorithm1(JNIEnv *env, int mergedSize, vector<int> queryTerms, jint top
 }
 
 JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
-  (JNIEnv *env, jobject jobj, jintArray terms, jint topK)
-  {
-    jsize Q = env->GetArrayLength(terms);
-    vector<int> queryTerms (Q);
-    env->GetIntArrayRegion( terms, 0, Q, &queryTerms[0] );
+  (JNIEnv *env, jobject jobj, jintArray terms, jint topK) {
+  jsize Q = env->GetArrayLength(terms);
+  vector<int> queryTerms (Q);
+  env->GetIntArrayRegion( terms, 0, Q, &queryTerms[0] );
 
-    cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
-    cout<<"Postings: "<<P<<endl;
+  cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
+  cout<<"Postings: "<<P<<endl;
 
-    int mergedSize = 0;
-    for (int q=0; q<queryTerms.size(); q++) {
-        mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
-    }
-      
-    cout<<"Merged size is going to be: "<<mergedSize<<endl;
-  
-    jobject alg1 = algorithm1(env, mergedSize, queryTerms, topK);
-    //jobject alg2 = algorithm2(env, mergedSize, queryTerms, topK);
-    return alg1;
+  int mergedSize = 0;
+  for (int q=0; q<queryTerms.size(); q++) {
+    mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
   }
-  
-  
+      
+  cout<<"Merged size is going to be: "<<mergedSize<<endl;
+ 
+  // TODO: Take some decision on which algorithm to use based on mergedSize and TOTAL_DOCS
+  //jobject alg1 = algorithm1(env, mergedSize, queryTerms, topK);
+  jobject alg2 = algorithm2(env, mergedSize, queryTerms, topK);
+  return alg2;
+}

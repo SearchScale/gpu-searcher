@@ -65,7 +65,7 @@ JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
   return T;
 }
 
-jobject algorithm2(JNIEnv *env, int mergedSize, vector<int> queryTerms, jint topK) {
+jobject algorithm2(JNIEnv *env, long mergedSize, vector<int> queryTerms, jint topK) {
   device_vector<int> mergedDocIds(mergedSize);
   device_vector<float> mergedPartialScores(mergedSize);
   device_vector<float> reducedValues(mergedSize);
@@ -107,7 +107,7 @@ jobject algorithm2(JNIEnv *env, int mergedSize, vector<int> queryTerms, jint top
   return directBuffer;
 }
 
-jobject algorithm1(JNIEnv *env, int mergedSize, vector<int> queryTerms, jint topK) {
+jobject algorithm1(JNIEnv *env, long mergedSize, vector<int> queryTerms, jint topK) {
   device_vector<float> result(TOTAL_DOCS);
   device_vector<int> retDocIdsGpu(TOTAL_DOCS);
   thrust::copy(docIdsTemplate.begin(), docIdsTemplate.end(), retDocIdsGpu.begin());
@@ -148,15 +148,16 @@ JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
   cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
   cout<<"Postings: "<<P<<endl;
 
-  int mergedSize = 0;
+  long mergedSize = 0;
   for (int q=0; q<queryTerms.size(); q++) {
+    cout<<"Term: "<<q<<", start: "<<startPositionsCpu[queryTerms[q]]<<", end: "<<startPositionsCpu[queryTerms[q]+1]<<endl;
     mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
   }
       
   cout<<"Merged size is going to be: "<<mergedSize<<endl;
  
   // TODO: Take some decision on which algorithm to use based on mergedSize and TOTAL_DOCS
-  //jobject alg1 = algorithm1(env, mergedSize, queryTerms, topK);
-  jobject alg2 = algorithm2(env, mergedSize, queryTerms, topK);
-  return alg2;
+  //jobject alg = algorithm1(env, mergedSize, queryTerms, topK);
+  jobject alg = algorithm2(env, mergedSize, queryTerms, topK);
+  return alg;
 }

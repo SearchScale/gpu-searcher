@@ -20,7 +20,7 @@ public class AcceleratedSearcher extends IndexSearcher {
 		super(r);
 		try {
 			gpuSearcher = new CudaIndex(r, this, leafContexts, field, whitelist);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}

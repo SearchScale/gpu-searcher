@@ -50,7 +50,7 @@
                         <compilerStartOption>-I ${JAVA_HOME}/include/linux/</compilerStartOption>
                     </compilerStartOptions>
 		    <compilerEndOptions>
-			<compilerEndOption>-ccbin /usr/bin/cuda-g++</compilerEndOption>
+			<!--compilerEndOption>-ccbin /usr/bin/cuda-g++</compilerEndOption-->
                         <compilerEndOption>--compiler-options "-fPIC"</compilerEndOption>
                     </compilerEndOptions>
                     <linkerStartOptions>
@@ -61,7 +61,7 @@
                     </linkerStartOptions>
                     <linkerEndOptions>
 			<linkerEndOption>-shared</linkerEndOption>
-			<linkerEndOption>-ccbin /usr/bin/cuda-g++</linkerEndOption>
+			<!--linkerEndOption>-ccbin /usr/bin/cuda-g++</linkerEndOption-->
                         <linkerEndOption>--compiler-options "-fPIC"</linkerEndOption>
                     </linkerEndOptions>
                 </configuration>

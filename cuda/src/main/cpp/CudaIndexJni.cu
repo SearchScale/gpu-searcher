@@ -10,9 +10,10 @@
   #include <thrust/device_vector.h>
   #include <vector>
   #include <sys/time.h>
-  
+  #include <thrust/execution_policy.h>
+  #include <thrust/sort.h>
+
   using namespace std;
-  using namespace thrust;
 
   long ms () {
       struct timeval tp;
@@ -23,9 +24,9 @@
   long T;
   long P;
 
-  host_vector<int> startPositionsCpu;
-  device_vector<int> docIdsGpu;
-  device_vector<float> partialScoresGpu;
+  thrust::host_vector<int> startPositionsCpu;
+  thrust::device_vector<int> docIdsGpu;
+  thrust::device_vector<float> partialScoresGpu;
 
   JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
   (JNIEnv *env, jobject jobj, jintArray docIds, jfloatArray partialScores, jintArray startPositions) {
@@ -110,22 +111,22 @@ JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
       for (int q=0; q<queryTerms.size(); q++) {
           mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
       }
-      device_vector<int> mergedDocIds(mergedSize);
-      device_vector<float> mergedPartialScores(mergedSize);
-      device_vector<float> reducedValues(mergedSize);
-      device_vector<int>   reducedKeys(mergedSize);
+      thrust::device_vector<int> mergedDocIds(mergedSize);
+      thrust::device_vector<float> mergedPartialScores(mergedSize);
+      thrust::device_vector<float> reducedValues(mergedSize);
+      thrust::device_vector<int>   reducedKeys(mergedSize);
   
       int pos = 0;
       for (int q=0; q<queryTerms.size(); q++) {
           int n = startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
-          copy_n(device, docIdsGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedDocIds.begin() + pos);
-          copy_n(device, partialScoresGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedPartialScores.begin() + pos);
+          copy_n(thrust::device, docIdsGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedDocIds.begin() + pos);
+          copy_n(thrust::device, partialScoresGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedPartialScores.begin() + pos);
   
           pos += n;
       }
   
       thrust::sort_by_key(mergedDocIds.begin(), mergedDocIds.end(), mergedPartialScores.begin());
-      thrust::pair<device_vector<int>::iterator,device_vector<float>::iterator > p = reduce_by_key(device,
+      thrust::pair<thrust::device_vector<int>::iterator,thrust::device_vector<float>::iterator > p = reduce_by_key(thrust::device,
                     mergedDocIds.begin(), mergedDocIds.end(),
                     mergedPartialScores.begin(),
                     reducedKeys.begin(),

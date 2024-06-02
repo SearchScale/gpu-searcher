@@ -1,3 +1,8 @@
+gpu-searcher
+============
+
+GPU accelerated BM25 using Thrust and Cuda.
+
 Running
 -------
 

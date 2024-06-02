@@ -128,7 +128,7 @@ public class CudaIndex {
 				long totalTillNow = 0;
 				while ((t = myTerms.next() )!= null) {
 					counter++;
-					if (whitelist != null && whitelist.contains(t.utf8ToString()) == false) {
+					if (whitelist != null && !whitelist.isEmpty() && whitelist.contains(t.utf8ToString()) == false) {
 						continue;
 					}
 					// get idf
@@ -158,7 +158,9 @@ public class CudaIndex {
 					globalPartialScoresScore.put(t.utf8ToString(), scoreList);
 
 					totalTillNow += docList.size();
-					System.out.println(counter+": "+term.text()+": postings length is size: "+postingsSize+", total: "+totalTillNow);
+					if (counter % 50000 == 0) {
+						System.out.println(counter+": "+term.text()+": postings length is size: "+postingsSize+", total: "+totalTillNow);
+					}
 				}
 				baseOffset += leaves.get(i).reader().maxDoc();
 				TOTAL_DOCS += leaves.get(i).reader().maxDoc();
@@ -180,7 +182,7 @@ public class CudaIndex {
 				termDict.write(key+"\n");
 				termDictionary.put(key.toString(), (counter++));
 
-				System.out.println("Finalizing term: "+key);
+				//System.out.println("Finalizing term: "+key);
 				List<Integer> docList = ((List)globalPartialScoresDocs.get(key));
 				List<Float> scoreList = ((List)globalPartialScoresScore.get(key));
 

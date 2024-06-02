@@ -1,0 +1,16 @@
+docids.arr
+file.db
+scores.arr
+starts.arr
+term-dict.txt
+totaldocs.int
+.project
+.settings/
+cuda/.classpath
+cuda/.gitignore
+cuda/.project
+cuda/.settings/
+lucene/.classpath
+lucene/.gitignore
+lucene/.project
+lucene/.settings/

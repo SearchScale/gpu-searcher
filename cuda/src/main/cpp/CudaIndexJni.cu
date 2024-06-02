@@ -1,158 +1,165 @@
+#include <stdio.h>
+#include <math.h>
+#include "CudaIndexJni.h"
+#include <thrust/transform.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+#include <vector>
+#include <sys/time.h>
 
-
-  #include <stdio.h>
-  #include <math.h>
-  #include "CudaIndexJni.h"
+#include <thrust/execution_policy.h>
+#include <thrust/sort.h>
   
-  #include <thrust/transform.h>
-  #include <thrust/functional.h>
-  #include <thrust/host_vector.h>
-  #include <thrust/device_vector.h>
-  #include <vector>
-  #include <sys/time.h>
-  #include <thrust/execution_policy.h>
-  #include <thrust/sort.h>
+using namespace std;
 
-  using namespace std;
+long ms () {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  return tp.tv_sec * 1000 + tp.tv_usec / 1000; //get current timestamp in milliseconds
+}
+  
+long T;
+long P;
+long TOTAL_DOCS;
 
-  long ms () {
-      struct timeval tp;
-      gettimeofday(&tp, NULL);
-      return tp.tv_sec * 1000 + tp.tv_usec / 1000; //get current timestamp in milliseconds
+struct saxpy_functor {
+  const float a;
+
+  saxpy_functor(float _a) : a(_a) {}
+
+  __host__ __device__
+  float operator()(const float& x, const float& y) const { 
+    return a * x + y;
   }
-  
-  long T;
-  long P;
+};
 
-  thrust::host_vector<int> startPositionsCpu;
-  thrust::device_vector<int> docIdsGpu;
-  thrust::device_vector<float> partialScoresGpu;
+thrust::host_vector<int> startPositionsCpu;
+thrust::device_vector<int> docIdsGpu;
+thrust::device_vector<float> partialScoresGpu;
+thrust::device_vector<int> docIdsTemplate;
 
-  JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
-  (JNIEnv *env, jobject jobj, jintArray docIds, jfloatArray partialScores, jintArray startPositions) {
-      jsize len = env->GetArrayLength(startPositions);
-      jsize numPostings = env->GetArrayLength(docIds);
-      vector<int> docs (numPostings);
-      env->GetIntArrayRegion( docIds, 0, numPostings, &docs[0] );
-      vector<float> scores (numPostings);
-      env->GetFloatArrayRegion( partialScores, 0, numPostings, &scores[0] );
-      int *starts = env->GetIntArrayElements(startPositions, NULL);
+JNIEXPORT jint JNICALL Java_CudaIndexJni_initIndex
+(JNIEnv *env, jobject jobj, jintArray docIds, jfloatArray partialScores, jintArray startPositions, jlong totalDocs) {
+  jsize len = env->GetArrayLength(startPositions);
+  jsize numPostings = env->GetArrayLength(docIds);
+  vector<int> docs (numPostings);
+  env->GetIntArrayRegion( docIds, 0, numPostings, &docs[0] );
+  vector<float> scores (numPostings);
+  env->GetFloatArrayRegion( partialScores, 0, numPostings, &scores[0] );
+  int *starts = env->GetIntArrayElements(startPositions, NULL);
   
-      T = len;
-      P = numPostings;
+  TOTAL_DOCS = totalDocs;
+  cout<<"[CUDA] TOTAL_DOCS: "<<TOTAL_DOCS<<endl; 
+  T = len;
+  P = numPostings;
 
-      for (int i=0; i<T; i++) {
-        startPositionsCpu.push_back(starts[i]);
-      }
-      docIdsGpu = docs;
-      partialScoresGpu = scores;
-      // Copy the vectors to the device
-      /*host_vector<int> cpu_docs(N);
-      for (int i=0; i<N; i++) cpu_docs[i] = docs[i];
-      gpu_docs = cpu_docs;
-  
-      host_vector<float> cpu_lats(N);
-      for (int i=0; i<N; i++) cpu_lats[i] = lats[i];
-      gpu_lats = cpu_lats;
-  
-      host_vector<float> cpu_lngs(N);
-      for (int i=0; i<N; i++) cpu_lngs[i] = lngs[i];
-      gpu_lngs = cpu_lngs;*/
-
-      /*startPositionsGpu = starts;
-      docIdsGpu = docs;
-      partialsScoresGpu = scores;
-  
-      cudaDeviceSynchronize();
-      */return T;
+  for (int i=0; i<T; i++) {
+    startPositionsCpu.push_back(starts[i]);
   }
+  docIdsGpu = docs;
+  partialScoresGpu = scores;
+
+  thrust::host_vector<int> tmp(TOTAL_DOCS);
+  for (int i=0; i<TOTAL_DOCS; i++)
+    tmp[i] = i;
+  docIdsTemplate = tmp;
+  return T;
+}
+
+jobject algorithm2(JNIEnv *env, long mergedSize, vector<int> queryTerms, jint topK) {
+  thrust::device_vector<int> mergedDocIds(mergedSize);
+  thrust::device_vector<float> mergedPartialScores(mergedSize);
+  thrust::device_vector<float> reducedValues(mergedSize);
+  thrust::device_vector<int>   reducedKeys(mergedSize);
+
+  int pos = 0;
+  for (int q=0; q<queryTerms.size(); q++) {
+    int n = startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
+    copy_n(thrust::device, docIdsGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedDocIds.begin() + pos);
+    copy_n(thrust::device, partialScoresGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedPartialScores.begin() + pos);
+
+    pos += n;
+  }
+
+  thrust::sort_by_key(mergedDocIds.begin(), mergedDocIds.end(), mergedPartialScores.begin());
+  thrust::pair<thrust::device_vector<int>::iterator,thrust::device_vector<float>::iterator > p = reduce_by_key(thrust::device,
+                  mergedDocIds.begin(), mergedDocIds.end(),
+                  mergedPartialScores.begin(),
+                  reducedKeys.begin(),
+                  reducedValues.begin());
+  thrust::sort_by_key(reducedValues.begin(), p.second, reducedKeys.begin(), thrust::greater<float>());
+
+  cout<<"Size of merged docid: "<<mergedDocIds.size()<<endl;
+  cout<<"Merged size: "<<mergedSize<<endl;
+
+  long retSize = topK;
+  if (topK < 0) {
+    thrust::device_vector<float>::iterator boundary = thrust::find(
+              thrust::device, reducedValues.begin(), reducedValues.end(), 0.0);
+    thrust::distance(reducedValues.begin(), boundary);
+  }
+  int   *retDocsAndScores = (int*)malloc(retSize*4*2);
+  float *distances = &((float*)retDocsAndScores)[retSize];
+
+  thrust::copy(reducedKeys.begin(), reducedKeys.begin()+retSize, retDocsAndScores);
+  thrust::copy(reducedValues.begin(), reducedValues.begin()+retSize, distances);
+
+  jobject directBuffer = env->NewDirectByteBuffer((void*)retDocsAndScores, retSize*2*4);
+  return directBuffer;
+}
+
+jobject algorithm1(JNIEnv *env, long mergedSize, vector<int> queryTerms, jint topK) {
+  thrust::device_vector<float> result(TOTAL_DOCS);
+  thrust::device_vector<int> retDocIdsGpu(TOTAL_DOCS);
+  thrust::copy(docIdsTemplate.begin(), docIdsTemplate.end(), retDocIdsGpu.begin());
+
+  for (int q=0; q<queryTerms.size(); q++) {
+    thrust::device_vector<float> partial(TOTAL_DOCS);
+    
+    scatter(partialScoresGpu.begin() + (startPositionsCpu[queryTerms[q]]), partialScoresGpu.begin() +
+        (startPositionsCpu[queryTerms[q]+1]), docIdsGpu.begin() + (startPositionsCpu[queryTerms[q]]), partial.begin());
+    
+    thrust::transform(partial.begin(), partial.end(), result.begin(), result.begin(), saxpy_functor(1));
+  }
+  thrust::sort_by_key(result.begin(), result.end(), retDocIdsGpu.begin(), thrust::greater<float>());
+  cout<<result[0]<<" ("<<retDocIdsGpu[0]<<")"<<endl;
+  cout<<result[1]<<" ("<<retDocIdsGpu[1]<<")"<<endl;
+  cout<<result[2]<<" ("<<retDocIdsGpu[2]<<")"<<endl;
+
+  long retSize = topK;
+  if (topK < 0) {
+    thrust::device_vector<float>::iterator boundary = thrust::find(
+              thrust::device, result.begin(), result.end(), 0.0);
+    thrust::distance(result.begin(), boundary);
+  }
+  int   *retDocsAndScores      = (int*)malloc(retSize*4*2);
+  float *distances = &((float*)retDocsAndScores)[retSize];
+  thrust::copy(retDocIdsGpu.begin(), retDocIdsGpu.begin() + retSize, retDocsAndScores);
+  thrust::copy(result.begin(), result.begin() + retSize, distances);
+  jobject directBuffer = env->NewDirectByteBuffer((void*)retDocsAndScores, retSize*2*4);
+  return directBuffer;
+}
 
 JNIEXPORT jobject JNICALL Java_CudaIndexJni_getScores
-  (JNIEnv *env, jobject jobj, jintArray terms)
-  {
-    jsize Q = env->GetArrayLength(terms);
-    vector<int> queryTerms (Q);
-    env->GetIntArrayRegion( terms, 0, Q, &queryTerms[0] );
+  (JNIEnv *env, jobject jobj, jintArray terms, jint topK) {
+  jsize Q = env->GetArrayLength(terms);
+  vector<int> queryTerms (Q);
+  env->GetIntArrayRegion( terms, 0, Q, &queryTerms[0] );
 
-    /*for (int i=0; i<T; i++) {
-        cout<<startPositionsCpu[i]<<", ";
-    } cout<<endl;
-  
-    for (int i=0; i<P; i++) {
-        cout<<docIdsGpu[i]<<"="<<partialScoresGpu[i]<<", ";
-    }
-    cout<<endl;*/
-    cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
-    cout<<"Postings: "<<P<<endl;
-      /*long timer = ms();
-  
-      // Actual scoring/sorting on device
-      device_vector<float> gpu_distances(N);
-      thrust::transform(gpu_lats.begin(), gpu_lats.end(), gpu_lngs.begin(), gpu_distances.begin(), geodist(lat, lng)  );
-      cudaDeviceSynchronize();
-      device_vector<int> docIds = gpu_docs;
-      cout<<"Transformation applied: "<<endl;
-      thrust::sort_by_key(gpu_distances.begin(), gpu_distances.end(), docIds.begin());
-      cudaDeviceSynchronize();
-      cout<<"Sorting done: "<<endl;
-  
-      int   *docs      = (int*)malloc(N*4*2);
-      float *distances = &((float*)docs)[N];
-  
-      thrust::copy(docIds.begin(), docIds.end(), docs);
-      thrust::copy(gpu_distances.begin(), gpu_distances.end(), distances);
-  
-      jobject directBuffer = env->NewDirectByteBuffer((void*)docs, N*2*4);
-      cout<<"Cuda After array copy total time: "<<ms()-timer<<endl;
-  
-      return directBuffer;*/
+  cout<<"Initialized CUDA with terms "<<T<<" and query terms "<<Q<<endl;
+  cout<<"Postings: "<<P<<endl;
 
-      int mergedSize = 0;
-      for (int q=0; q<queryTerms.size(); q++) {
-          mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
-      }
-      thrust::device_vector<int> mergedDocIds(mergedSize);
-      thrust::device_vector<float> mergedPartialScores(mergedSize);
-      thrust::device_vector<float> reducedValues(mergedSize);
-      thrust::device_vector<int>   reducedKeys(mergedSize);
-  
-      int pos = 0;
-      for (int q=0; q<queryTerms.size(); q++) {
-          int n = startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
-          copy_n(thrust::device, docIdsGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedDocIds.begin() + pos);
-          copy_n(thrust::device, partialScoresGpu.begin() + (startPositionsCpu[queryTerms[q]]), n, mergedPartialScores.begin() + pos);
-  
-          pos += n;
-      }
-  
-      thrust::sort_by_key(mergedDocIds.begin(), mergedDocIds.end(), mergedPartialScores.begin());
-      thrust::pair<thrust::device_vector<int>::iterator,thrust::device_vector<float>::iterator > p = reduce_by_key(thrust::device,
-                    mergedDocIds.begin(), mergedDocIds.end(),
-                    mergedPartialScores.begin(),
-                    reducedKeys.begin(),
-                    reducedValues.begin());
-      thrust::sort_by_key(reducedValues.begin(), p.second, reducedKeys.begin(), thrust::greater<float>());
-      //t.stop(); cout<<"Time: "<<t.elapsed()/1000000.0<<endl;
-  
-      cout<<"Size of merged docid: "<<mergedDocIds.size()<<endl;
-
-      cout<<"(CUDA) Doc "<<reducedKeys[0]<<": "<<"score="<<reducedValues[0]<<endl;
-      cout<<"(CUDA) Doc "<<reducedKeys[1]<<": "<<"score="<<reducedValues[1]<<endl;
-      cout<<"(CUDA) Doc "<<reducedKeys[2]<<": "<<"score="<<reducedValues[2]<<endl;
-
-      cout<<"Merged size: "<<mergedSize<<endl;
-      int   *retDocsAndScores      = (int*)malloc(mergedSize*4*2);
-      float *distances = &((float*)retDocsAndScores)[mergedSize];
-  
-      thrust::copy(reducedKeys.begin(), reducedKeys.end(), retDocsAndScores);
-      thrust::copy(reducedValues.begin(), reducedValues.end(), distances);
-  
-      jobject directBuffer = env->NewDirectByteBuffer((void*)retDocsAndScores, mergedSize*2*4);
-  
-      return directBuffer;
+  long mergedSize = 0;
+  for (int q=0; q<queryTerms.size(); q++) {
+    cout<<"Term: "<<q<<", start: "<<startPositionsCpu[queryTerms[q]]<<", end: "<<startPositionsCpu[queryTerms[q]+1]<<endl;
+    mergedSize += startPositionsCpu[queryTerms[q]+1]-startPositionsCpu[queryTerms[q]];
   }
-  
-  
-  
-  
-  
+      
+  cout<<"Merged size is going to be: "<<mergedSize<<endl;
+ 
+  // TODO: Take some decision on which algorithm to use based on mergedSize and TOTAL_DOCS
+  //jobject alg = algorithm1(env, mergedSize, queryTerms, topK);
+  jobject alg = algorithm2(env, mergedSize, queryTerms, topK);
+  return alg;
+}

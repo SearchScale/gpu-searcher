@@ -28,21 +28,53 @@
         <dependency>
             <groupId>org.apache.lucene</groupId>
             <artifactId>lucene-core</artifactId>
-            <version>7.5.0</version>
+            <version>7.7.0</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.lucene</groupId>
             <artifactId>lucene-spatial-extras</artifactId>
-            <version>7.5.0</version>
+            <version>7.7.0</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.apache.solr/solr-solrj -->
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-solrj</artifactId>
-            <version>7.5.0</version>
+            <version>7.7.0</version>
         </dependency>
+        
+        <dependency>
+            <groupId>com.opencsv</groupId>
+            <artifactId>opencsv</artifactId>
+            <version>5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.15.1</version>
+        </dependency>
+
+		 <dependency>
+		    <groupId>org.slf4j</groupId>
+		    <artifactId>slf4j-api</artifactId>
+		    <version>2.0.13</version>
+		</dependency>
+
+		<dependency>
+		    <groupId>org.slf4j</groupId>
+		    <artifactId>slf4j-simple</artifactId>
+		    <version>2.0.13</version>
+		    <scope>runtime</scope>
+		</dependency>
+
+
+<!-- https://mvnrepository.com/artifact/org.mapdb/mapdb -->
+<dependency>
+    <groupId>org.mapdb</groupId>
+    <artifactId>mapdb</artifactId>
+    <version>3.0.7</version>
+</dependency>
 
     </dependencies>
 

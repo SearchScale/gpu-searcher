@@ -6,7 +6,7 @@ public class CudaIndexJni {
     }
 
     
-	public native int initIndex(int[] docIds, float[] partialScores, int[] startOffsets);
-	public native Object getScores(int terms[]);
+	public native int initIndex(int[] docIds, float[] partialScores, int[] startOffsets, long TOTAL_DOCS);
+	public native Object getScores(int terms[], int n);
 }
 
